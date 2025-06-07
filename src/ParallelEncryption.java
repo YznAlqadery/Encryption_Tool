@@ -102,11 +102,13 @@ public class ParallelEncryption {
             Thread thread = new Thread(() -> {
                String bestResultInThread = "";
                for(String line : subList){
+                   // Find the longest line in the thread
                    if(line.length() > bestResultInThread.length()){
                        bestResultInThread = line;
                    }
                }
                try {
+                   // Add the longest line the BlockingQueue
                    resultQueue.put(bestResultInThread);
                } catch (InterruptedException e) {
                    throw new RuntimeException(e);
@@ -120,6 +122,7 @@ public class ParallelEncryption {
             th.join();
         }
 
+        // Find the longest line among all threads
         String bestOfAllThreads = "";
         while(!resultQueue.isEmpty()){
             String current = resultQueue.take();
