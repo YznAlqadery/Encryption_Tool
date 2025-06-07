@@ -1,12 +1,23 @@
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 
 public class ParallelEncryption {
+
+    public static void writeExecutionTimesToCSV(String path, Map<Integer, Long> timesMap){
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))){
+            writer.write("Threads,Time(ms)\n");
+            for (Map.Entry<Integer,Long> entry : timesMap.entrySet()){
+                writer.write(entry.getKey() + "," + entry.getValue() + "\n");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static String caeserCipher(String text, int shift) {
         StringBuilder result = new StringBuilder();
@@ -27,9 +38,12 @@ public class ParallelEncryption {
         return result.toString();
     }
 
-    public static void runParallel(String inputPath,String outputPath,int numOfThreads) throws IOException, InterruptedException {
+
+
+    public static long runParallel(String inputPath,String outputPath,int numOfThreads) throws IOException, InterruptedException {
         List<String> lines = Files.readAllLines(Paths.get(inputPath));
         int totalLinesInFile = lines.size();
+        // The chunk each thread gets to execute
         int sizeEachThread = totalLinesInFile / numOfThreads;
 
         List<String> encryptedResults = Collections.synchronizedList(new ArrayList<>());
@@ -49,17 +63,21 @@ public class ParallelEncryption {
                 }
                 encryptedResults.addAll(encryptedSubList);
             });
+
+
             threads.add(thread);
             thread.start();
 
-            for (Thread th : threads) th.join(); // Wait for all threads to complete
+            for (Thread th : threads) {
+                thread.join();   // Wait for all threads to complete
+            }
         }
 
         long endTime = System.currentTimeMillis();
         System.out.println("Encryption with " + numOfThreads + " threads took: " + (endTime - startExecutionTime) + " ms");
 
         Files.write(Paths.get(outputPath), encryptedResults);
-
+        return endTime - startExecutionTime;
     }
 
 
@@ -68,6 +86,12 @@ public class ParallelEncryption {
         String csvFile = "C:\\Users\\yazan\\Desktop\\Medical_Data.csv";
         String outputCSVFile = "C:\\Users\\yazan\\Desktop\\encrypted_data.csv";
 
-        runParallel(csvFile,outputCSVFile,4);
+        Map<Integer, Long> executionTimes = new HashMap<>();
+        executionTimes.put(4,runParallel(csvFile,outputCSVFile,4));
+        executionTimes.put(8,runParallel(csvFile,outputCSVFile,8));
+        executionTimes.put(16,runParallel(csvFile,outputCSVFile,16));
+        executionTimes.put(32,runParallel(csvFile,outputCSVFile,32));
+
+        writeExecutionTimesToCSV("C:/Users/yazan/Desktop/execution_times.csv", executionTimes);
     }
 }
