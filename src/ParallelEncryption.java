@@ -4,11 +4,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 
 public class ParallelEncryption {
 
     public static void writeExecutionTimesToCSV(String path, Map<Integer, Long> timesMap){
+        // Ensures the file is automatically closed after writing
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))){
             writer.write("Threads,Time(ms)\n");
             for (Map.Entry<Integer,Long> entry : timesMap.entrySet()){
@@ -80,6 +84,54 @@ public class ParallelEncryption {
         return endTime - startExecutionTime;
     }
 
+    public static String runParallelWithMessagePassing(String inputPath, int numOfThreads) throws IOException, InterruptedException {
+
+        List<String> lines = Files.readAllLines(Paths.get(inputPath));
+        int totalLinesInFile = lines.size();
+        int  sizeEachThread = totalLinesInFile / numOfThreads;
+
+        // Queue of best result(line) for each thread
+        BlockingQueue<String> resultQueue = new LinkedBlockingQueue<>();
+        List<Thread> threads = new ArrayList<>();
+
+        for(int i = 0; i < numOfThreads; i++){
+            int start = i * sizeEachThread;
+            int end = (i == numOfThreads - 1)? totalLinesInFile: start + sizeEachThread;
+            List<String> subList = lines.subList(start,end);
+
+            Thread thread = new Thread(() -> {
+               String bestResultInThread = "";
+               for(String line : subList){
+                   if(line.length() > bestResultInThread.length()){
+                       bestResultInThread = line;
+                   }
+               }
+               try {
+                   resultQueue.put(bestResultInThread);
+               } catch (InterruptedException e) {
+                   throw new RuntimeException(e);
+               }
+            });
+
+            threads.add(thread);
+            thread.start();
+        }
+        for(Thread th: threads){
+            th.join();
+        }
+
+        String bestOfAllThreads = "";
+        while(!resultQueue.isEmpty()){
+            String current = resultQueue.take();
+            if(current.length() > bestOfAllThreads.length()){
+                bestOfAllThreads = current;
+            }
+        }
+
+        System.out.println("Final best result (longest line): " + bestOfAllThreads);
+        return bestOfAllThreads;
+    }
+
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // Paths to my files
@@ -93,5 +145,8 @@ public class ParallelEncryption {
         executionTimes.put(32,runParallel(csvFile,outputCSVFile,32));
 
         writeExecutionTimesToCSV("C:/Users/yazan/Desktop/execution_times.csv", executionTimes);
+
+        // Run parallel with message passing
+        runParallelWithMessagePassing(csvFile,4);
     }
 }
